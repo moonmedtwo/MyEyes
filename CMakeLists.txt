@@ -13,7 +13,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -lstdc++fs -Wall -Wno-comment -Werror")
 
 # Find the QtWidgets library
-find_package(Qt5 REQUIRED Widgets)
+find_package(Qt5 REQUIRED Widgets Core Gui SerialPort)
 
 find_package(VTK REQUIRED)
 find_package(PCL 1.7.1 REQUIRED)
@@ -22,11 +22,14 @@ find_package(PCL 1.7.1 REQUIRED)
 list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
 
 include_directories(${PCL_INCLUDE_DIRS})
+link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
 set(project_SOURCES main.cpp
     mainwindow.cpp
-    userRecognizer_thread.cpp)
+    userrecognizer_thread.cpp
+    userrecognizer_window.cpp
+    usercomm.cpp)
 
 set(project_HEADERS mainwindow.h)
 
@@ -34,4 +37,4 @@ add_executable(${PROJECT_NAME} ${project_SOURCES})
 
 target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES})
 
-qt5_use_modules(${PROJECT_NAME} Widgets)
+qt5_use_modules(${PROJECT_NAME} Widgets Core Gui SerialPort)

@@ -26,6 +26,17 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/segmentation/extract_polygonal_prism_data.h>
 
+#include <pcl/recognition/cg/hough_3d.h>
+#include <pcl/recognition/cg/geometric_consistency.h>
+
+#ifdef forever // Solve macro conflict from Qt and metlibs
+#undef forever
+#include <pcl/recognition/hv/hv_go.h>
+#define forever Q_FOREVER
+#endif
+
+#include <pcl/registration/icp.h>
+
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/features/shot_omp.h>
 
@@ -34,30 +45,49 @@
 #include <pcl/Vertices.h>
 
 #include <pcl/surface/convex_hull.h>
+
 #define xOLD_SEGMENTATION_CLUSTERING // Segmentation implemented in pcl_clustering tutorials
 #define OPENNI_TRACKING_BASED_SEGMENATION_CLUSTERING // Segmentation implemented in openni_tracking tutorials
 
-typedef pcl::SHOT352 DescriptorType;
 
 class UserRecognizer_Thread : public QThread
 {
     Q_OBJECT
 public:
     UserRecognizer_Thread(CloudPtr &scene_pass,
-                          CloudPtr &model,
+                          const std::vector<std::string> &model_list,
                           QObject *parent = 0);
     ~UserRecognizer_Thread();
 
     void
-    gridSample(const CloudConstPtr &cloud, CloudPtr &result,
+    gridSample(const CloudConstPtr &cloud, const CloudPtr &result,
                double leaf_size = 0.01);
     void
-    computeNormals(const CloudConstPtr &cloud,
+    computeNormals_OMP(const CloudConstPtr &cloud,
                    pcl::PointCloud<pcl::Normal>::Ptr &result);
     void
-    computeSHOTs(const CloudConstPtr &cloud_downSampled,
-                 const pcl::PointCloud<pcl::Normal>::ConstPtr &cloud_normals,
-                 pcl::PointCloud<DescriptorType>::Ptr &desc);
+    computeSHOTs_OMP(const CloudConstPtr &cloud_downSampled,
+                     const CloudConstPtr &search_surface,
+                     const pcl::PointCloud<pcl::Normal>::ConstPtr &cloud_normals,
+                     DescCloudPtr &desc, float radius = 0.02);
+    void
+    computeSHOTs_OMP(const CloudConstPtr &cloud_downSampled,
+                     const pcl::PointCloud<pcl::Normal>::ConstPtr &cloud_normals,
+                     DescCloudPtr &desc, float radius = 0.02);
+
+    pcl::CorrespondencesPtr
+    correspondencesGrouping(const DescCloudConstPtr &model_descriptors,
+                            const DescCloudConstPtr &scene_descriptors,
+                            std::vector<int> &model_good_keypoints_indices,
+                            std::vector<int> &scene_good_keypoints_indices);
+
+    std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> >
+    GeoConGrouping(pcl::CorrespondencesPtr &model_scene_corrs,
+                   const CloudConstPtr &model_keypoints,
+                   const CloudConstPtr &scene_keypoints);
+
+    std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> >\
+    w_SHOT_recognizer();
 
 #ifdef OPENNI_TRACKING_BASED_SEGMENATION_CLUSTERING
     void
@@ -90,6 +120,18 @@ public:
     void
     cluster(CloudPtr &scene_removedPlanars,
             std::vector<CloudPtr> &clusteredObjects);
+
+    std::vector<CloudConstPtr>
+    ICP_align(const CloudConstPtr &inputTarget,
+              const std::vector<CloudConstPtr> &inputSources);
+
+    std::vector<CloudConstPtr>
+    HypothesisVerification(const CloudPtr &scene_cloud,
+                           std::vector<CloudConstPtr> &models);
+
+//    std::vector<CloudPtr>
+//    HypothesisVerification(const CloudPtr &scene_cloud,
+//                           std::vector<CloudPtr> &models);
 #endif //OPENNI_TRACKING_BASED_SEGMENATION_CLUSTERING
 
 #ifdef OLD_SEGMENATION_CLUSTERING
@@ -102,21 +144,28 @@ public:
 
 signals:
     void
-    resultReady(/*userdata type*/);
+    resultReady(std::vector<CloudPtr> clusteredObjects);
+
+    void
+    errorHandler(const QString &error, int type);
 
 protected:
     void run() override;
 
+    bool found_;
+
     CloudPtr scene_pass_;
     CloudPtr model_;
-    CloudPtr scene_pass_downSampled_;
-    CloudPtr model_downSampled_;
+    CloudPtr scene_keypoints_;
+    CloudPtr model_keypoints_;
 
     pcl::PointCloud<pcl::Normal>::Ptr scene_normals_;
     pcl::PointCloud<pcl::Normal>::Ptr model_normals_;
 
     std::vector<CloudPtr> planars_;
     std::vector<CloudPtr> clusteredObjects_;
+
+    std::vector<std::string> model_list_;
 
 #ifdef OPENNI_TRACKING_BASED_SEGMENATION_CLUSTERING
     CloudPtr scene_without_planars_;

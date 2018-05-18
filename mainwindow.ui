@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1103</width>
+    <width>1185</width>
     <height>746</height>
    </rect>
   </property>
@@ -40,7 +40,7 @@
    <widget class="QPushButton" name="pushButton_recognize">
     <property name="geometry">
      <rect>
-      <x>310</x>
+      <x>440</x>
       <y>600</y>
       <width>111</width>
       <height>25</height>
@@ -104,13 +104,173 @@
      <bool>true</bool>
     </property>
    </widget>
+   <widget class="QPushButton" name="pushButton_visData">
+    <property name="geometry">
+     <rect>
+      <x>570</x>
+      <y>600</y>
+      <width>89</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>PushButton</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_OpenComm">
+    <property name="geometry">
+     <rect>
+      <x>670</x>
+      <y>600</y>
+      <width>101</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Connect</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_CommStatus">
+    <property name="geometry">
+     <rect>
+      <x>780</x>
+      <y>600</y>
+      <width>281</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>No connection</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
+    </property>
+    <property name="wordWrap">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="Comm_comboBox">
+    <property name="geometry">
+     <rect>
+      <x>670</x>
+      <y>630</y>
+      <width>101</width>
+      <height>25</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_cmdGrab">
+    <property name="geometry">
+     <rect>
+      <x>1080</x>
+      <y>10</y>
+      <width>89</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Grab</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_Filter">
+    <property name="geometry">
+     <rect>
+      <x>180</x>
+      <y>580</y>
+      <width>51</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>15</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Filter</string>
+    </property>
+    <property name="scaledContents">
+     <bool>true</bool>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+    <property name="wordWrap">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QSlider" name="horizontalSlider_Filter_z">
+    <property name="geometry">
+     <rect>
+      <x>180</x>
+      <y>610</y>
+      <width>160</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="maximum">
+     <number>1000</number>
+    </property>
+    <property name="singleStep">
+     <number>10</number>
+    </property>
+    <property name="pageStep">
+     <number>100</number>
+    </property>
+    <property name="value">
+     <number>1000</number>
+    </property>
+    <property name="sliderPosition">
+     <number>1000</number>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Horizontal</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_Filter_z">
+    <property name="geometry">
+     <rect>
+      <x>350</x>
+      <y>600</y>
+      <width>51</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>13</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>z</string>
+    </property>
+    <property name="scaledContents">
+     <bool>true</bool>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+    </property>
+    <property name="wordWrap">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="comboBox_recognizedObjects">
+    <property name="geometry">
+     <rect>
+      <x>440</x>
+      <y>630</y>
+      <width>111</width>
+      <height>25</height>
+     </rect>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1103</width>
+     <width>1185</width>
      <height>22</height>
     </rect>
    </property>

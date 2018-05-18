@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       += core gui
+QT       += core gui serialport
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -29,15 +29,22 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
         main.cpp \
         mainwindow.cpp \
-    userRecognizer_thread.cpp
+    userrecognizer_window.cpp \
+    userrecognizer_thread.cpp \
+    usercomm.cpp \
+    usertracking_thread.cpp
 
 HEADERS += \
         mainwindow.h \
     commons.h \
-    userRecognizer_thread.h
+    userrecognizer_window.h \
+    userrecognizer_thread.h \
+    usercomm.h \
+    usertracking_thread.h
 
 FORMS += \
-        mainwindow.ui
+        mainwindow.ui \
+    userRecognizer_window.ui
 
 DISTFILES += \
     CMakeLists.txt

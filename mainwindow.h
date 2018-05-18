@@ -1,6 +1,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+
 #include <QMainWindow>
 #include <commons.h>
 
@@ -14,7 +15,11 @@
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/voxel_grid.h>
 
-#include "userRecognizer_thread.h"
+#include "userrecognizer_thread.h"
+#include "userrecognizer_window.h"
+#include "usercomm.h"
+
+
 
 enum grabberState
 {
@@ -40,6 +45,9 @@ public:
     initViewer();
 
     void
+    initSerialPortSettings();
+
+    void
     cloudCallback(const CloudConstPtr &cloud);
 
     void
@@ -55,28 +63,13 @@ public:
     updateGrabberState(const grabberState &gState);
 
     void
-    filterPassThrough(const CloudConstPtr &cloud, Cloud &result)
-    {
-        pcl::PassThrough<PointType> pass;
-        pass.setFilterFieldName ("z");
-        pass.setFilterLimits (0.0, 10.0);
-        //pass.setFilterLimits (0.0, 1.5);
-        //pass.setFilterLimits (0.0, 0.6);
-        pass.setKeepOrganized (false);
-        pass.setInputCloud (cloud);
-        pass.filter (result);
-    }
+    filterPassThrough(const CloudConstPtr &cloud, Cloud &result);
 
     void
-    gridSample (const CloudConstPtr &cloud, Cloud &result, double leaf_size = 0.01)
-    {
-      pcl::VoxelGrid<PointType> grid;
-      //pcl::ApproximateVoxelGrid<PointType> grid;
-      grid.setLeafSize (float (leaf_size), float (leaf_size), float (leaf_size));
-      grid.setInputCloud (cloud);
-      grid.filter (result);
-      //result = *cloud;
-    }
+    gridSample (const CloudConstPtr &cloud, Cloud &result, double leaf_size = 0.01);
+
+    void
+    removeCloudFromViz(std::vector<CloudPtr> &clouds, const std::string &prename);
 
 public slots:
     void
@@ -86,14 +79,32 @@ public slots:
     grabberDie();
 
     void
-    RecognitionThreadDestroyed()
-    {
-       std::cout << __FUNCTION__ << std::endl;
-       pRecognitionThread_ = NULL;
-    }
+    recognitionThreadDestroyed();
+    void
+    recognitionResult(std::vector<CloudPtr> results);
+
+    void
+    serialPort_connected();
+    void
+    serialPort_disconnected();
+    void
+    serialPort_packetReceived(const QByteArray &data);
+    void
+    serialPort_handleError(const QString &error);
+
+    void
+    errorHandler(const QString &error,int type);
 
 signals:
-    void cloudChanged();
+    void
+    cloudChanged();
+
+    void
+    openSerialPort();
+    void
+    closeSerialPort();
+    void
+    serialPort_write(const QByteArray &data);
 
 private:
     Ui::MainWindow *ui;
@@ -103,19 +114,33 @@ protected:
     QTimer * grabberWDT;
 
     QMutex cloud_mtx_;
+    QMutex viewer_mtx_;
+
     boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer_;
     bool new_cloud_;
     CloudPtr cloud_pass_;
     CloudPtr model_;
+    std::string model_dir_;
+
+    std::vector<CloudPtr> recognizedObjects_;
 
     enum grabberState gState_;
     UserRecognizer_Thread *pRecognitionThread_;
 
     float cloud_fps_;
 
+    UserComm comm;
+
+    double filter_z;
+
 private slots:
     void on_pushButton_restartGrabber_clicked();
     void on_pushButton_recognize_clicked();
+    void on_pushButton_visData_clicked();
+    void on_Comm_comboBox_currentTextChanged(const QString &arg1);
+    void on_pushButton_OpenComm_clicked();
+    void on_pushButton_cmdGrab_clicked();
+    void on_horizontalSlider_Filter_z_valueChanged(int value);
 };
 
 #endif // MAINWINDOW_H
