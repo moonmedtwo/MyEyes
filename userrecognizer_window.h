@@ -2,8 +2,13 @@
 #define USERRECOGNIZER_WINDOW_H
 
 #include <QDialog>
-#include <mainwindow.h>
+//#include <mainwindow.h>
 #include "commons.h"
+
+#include <vtkRenderWindow.h>
+
+#include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/io/pcd_io.h>
 
 #include <QDir>
 #include <QFileDialog>

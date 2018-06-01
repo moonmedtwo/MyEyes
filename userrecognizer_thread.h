@@ -147,6 +147,9 @@ signals:
     resultReady(std::vector<CloudPtr> clusteredObjects);
 
     void
+    progress(int percent, int model, int totalmodel);
+
+    void
     errorHandler(const QString &error, int type);
 
 protected:

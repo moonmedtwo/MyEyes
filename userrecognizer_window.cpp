@@ -38,7 +38,6 @@ UserRecognizer_Window::renderCloud(const std::string &path)
 //        viewer_->setupInteractor(ui->qvtkWidget->GetInteractor(),\
 //                                 ui->qvtkWidget->GetRenderWindow());
         viewer_->addCoordinateSystem(0.1,"coordinateAxis",0);
-        viewer_->resetCamera();
         viewer_started_ = true;
     }
 
@@ -51,6 +50,8 @@ UserRecognizer_Window::renderCloud(const std::string &path)
 
     viewer_->removeAllPointClouds();
     viewer_->addPointCloud(cloud,"cloud",0);
+    viewer_->resetCameraViewpoint("cloud");
+    viewer_->resetCamera();
     ui->qvtkWidget->update();
 }
 

@@ -12,9 +12,12 @@
 #include <pcl/console/parse.h>
 #include <pcl/common/time.h>
 #include <pcl/common/centroid.h>
+#include <pcl/common/transforms.h>
 #include <pcl/search/kdtree.h>
 
 #include <ctime>
+
+#include <boost/format.hpp>
 
 #define QMSGBOX_NoICon 		0
 #define QMSGBOX_Info 		1

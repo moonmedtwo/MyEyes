@@ -4,14 +4,34 @@
 #include <QSerialPortInfo>
 #include <string>
 
+#include "util.h"
+
 #define REG_OBJECT_ID "regObj_"
 
-#define GRABBER_TIMEOUT	     10000
+#define GRABBER_TIMEOUT	    				10000
+#define SERIALPORT_ACK_TIMEOUT	 			5000
+#define SERIALPORT_ACK_RETRIES 				3
+#define SERIALPORT_INTERVAL_BETWEEN_RETRY   (SERIALPORT_TIMEOUT/SERIALPORT_RETRIES) // 50 = 2.5 * STM_UART_CHECK_INTERVAL
 typedef typename pcl::visualization::PointCloudColorHandlerCustom<PointType> ColorHandler;
 
 /*****************************************
  * UTIL FUNTIONS *************************
  *****************************************/
+
+/*
+ * @brief: round to n decimal places
+ */
+double
+user_rounding(double var, unsigned long decimal)
+{
+   int multiplier = 1;
+   while (decimal--)
+   {
+       multiplier *= 10;
+   }
+   double value = (int)(var * multiplier + 0.5);
+   return (double)value/multiplier;
+}
 
 /*
  * @brief: filter cloud field ("x" or "y" or "z")
@@ -175,17 +195,24 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow),
     grabber_(NULL),
     grabberWDT(NULL),
+
     cloud_pass_(new Cloud),
     model_(new Cloud),
     model_dir_(DEFAULT_MODEL_DIR),
+
     pRecognitionThread_(NULL),
-    filter_z(10)
+
+    commWDT(NULL),
+    filter_z(10),
+    trackObject_selectedIdx_(-1)
 {
     PRINT_CURRENT_TIME(__FUNCTION__);
     ui->setupUi(this);
 
-    initViewer();
-    initSerialPortSettings();
+    viewer_init();
+    serialPort_init();
+
+    userSysticks.start();
 }
 
 MainWindow::~MainWindow()
@@ -206,6 +233,10 @@ MainWindow::cloudCallback(const CloudConstPtr &cloud)
 //        FPS_CALC(__FUNCTION__);
         cloud_pass_.reset(new Cloud);
         filterPassThrough(cloud,*cloud_pass_);
+        if(userTracker.hasTarget())
+        {
+            userTracker.trackingRoutine(cloud_pass_);
+        }
         new_cloud_ = true;
         cloud_mtx_.unlock();
         emit cloudChanged();
@@ -232,13 +263,14 @@ MainWindow::kinect_init()
        delete grabber_;
        grabber_ = NULL;
    }
-   if(grabberWDT)
-   {
-       delete grabberWDT;
-       grabberWDT = NULL;
-   }
+//   if(grabberWDT)
+//   {
+//       delete grabberWDT;
+//       grabberWDT = NULL;
+//   }
    // Kinect image grabber
-   grabberWDT = new QTimer;
+   if(!grabberWDT)
+    grabberWDT = new QTimer;
    connect(grabberWDT,SIGNAL(timeout()),this,SLOT(grabberDie()));
 
    try
@@ -271,7 +303,7 @@ MainWindow::kinect_init()
  * @brief: part of MainWindow constructor
  */
 void
-MainWindow::initViewer()
+MainWindow::viewer_init()
 {
    // Create new pointer with no interacter as false in the 2nd arg
    viewer_.reset(new pcl::visualization::PCLVisualizer("PCLViewer",false));
@@ -280,7 +312,7 @@ MainWindow::initViewer()
                               ui->qvtkWidget_cloudViewer->GetRenderWindow());
 }
 void
-MainWindow::initSerialPortSettings()
+MainWindow::serialPort_init()
 {
 
     // Add availalbe port
@@ -289,6 +321,10 @@ MainWindow::initSerialPortSettings()
     {
         ui->Comm_comboBox->addItem(info.portName());
     }
+    // Initilize packet status
+    for(int i = 0; i < UserComm::NUMB_OF_CMD; i++)
+        packetStatus_[i] = UserComm::idle;
+
     // Vital connections
     connect(&comm,&UserComm::dataReceived,
             this,&MainWindow::serialPort_packetReceived);
@@ -305,6 +341,11 @@ MainWindow::initSerialPortSettings()
             &comm,&UserComm::closeSerialPort);
     connect(this,&MainWindow::serialPort_write,
             &comm, &UserComm::writeData);
+
+    if(!commWDT)
+        commWDT = new QTimer;
+
+    connect(commWDT,SIGNAL(timeout()),this,SLOT(serialPort_routine()));
 }
 /*
  * SLOT
@@ -329,10 +370,16 @@ MainWindow::updateViewer()
         {
             viewer_->addPointCloud(cloud_pass_,"cloudpass");
             viewer_->resetCameraViewpoint("cloudpass");
+            viewer_->resetCamera();
 //            viewer_->addCoordinateSystem(1,"XYZcoordinates",0);
         }
         new_cloud_ = false;
         cloud_mtx_.unlock();
+
+        if(userTracker.hasTarget())
+        {
+            drawResult();
+        }
         ui->qvtkWidget_cloudViewer->update();
     }
 
@@ -365,6 +412,25 @@ void
 MainWindow::grabberDie()
 {
     updateGrabberState(grabberHang);
+}
+/*
+ * SLOT
+ * @brief: update progress of recognition thread
+ */
+void
+MainWindow::recognitionProgress(int percent, int model, int totalmodel)
+{
+    ui->progressBar_recognitionThread->setValue(percent);
+    std::stringstream ss;
+    if(percent != 100)
+    {
+        ss << "Processing model " << model + 1 << " out of " << totalmodel;
+    }
+    else
+    {
+        ss << "Found object with model " << model + 1;
+    }
+    ui->label_progressRecognition->setText(QString::fromStdString(ss.str()));
 }
 /*
  * SLOT
@@ -479,6 +545,8 @@ MainWindow::on_pushButton_recognize_clicked()
     // the last thread has finished and pointer is reset
     if(NULL == pRecognitionThread_)
     {
+        // Stop tracking
+        userTracker.stopTracking();
         // Clear last results
         ui->comboBox_recognizedObjects->clear();
         removeCloudFromViz(recognizedObjects_,REG_OBJECT_ID);
@@ -527,9 +595,11 @@ MainWindow::on_pushButton_recognize_clicked()
         connect(pRecognitionThread_,&UserRecognizer_Thread::finished,
                 pRecognitionThread_, &QObject::deleteLater);
 
-        // Notify user
+        // Notify thread progress
         connect(pRecognitionThread_,&UserRecognizer_Thread::destroyed,
                 this, &MainWindow::recognitionThreadDestroyed);
+        connect(pRecognitionThread_,&UserRecognizer_Thread::progress,
+                this, &MainWindow::recognitionProgress);
 
         // Notify user
         connect(pRecognitionThread_,&UserRecognizer_Thread::errorHandler,
@@ -543,45 +613,6 @@ MainWindow::on_pushButton_recognize_clicked()
         pRecognitionThread_->start();
     }
     else pleaseWait_MsgBox("pRecognitionThread_");
-}
-
-void
-MainWindow::on_pushButton_visData_clicked()
-{
-    if(NULL != pRecognitionThread_)
-    {
-        pleaseWait_MsgBox("pRecognitionThread_");
-    }
-    if(recognizedObjects_.size())
-    {
-        std::vector<std::vector<double> > colorHash;
-        initColorHash(colorHash);
-        for(unsigned i = 0; i < recognizedObjects_.size();i++)
-        {
-            std::stringstream ss;
-            std::string id(REG_OBJECT_ID);
-            ss << id << i;
-            int colorIdx = colorHash.size() - i % colorHash.size() - 1;
-            ColorHandler cHandler(recognizedObjects_[i],
-                                  colorHash[colorIdx][0],
-                                  colorHash[colorIdx][1],
-                                  colorHash[colorIdx][2]);
-
-            // Combobox for user interaction
-            ui->comboBox_recognizedObjects->addItem(QString::fromStdString(ss.str()));
-            ui->comboBox_recognizedObjects->setItemData(i,
-                                                        QColor(colorHash[colorIdx][0],
-                                                               colorHash[colorIdx][1],
-                                                               colorHash[colorIdx][2]),
-                                                        Qt::BackgroundRole);
-
-            if(!viewer_->updatePointCloud(recognizedObjects_[i],cHandler,ss.str()))
-            {
-                viewer_->addPointCloud(recognizedObjects_[i],cHandler,ss.str(),0);
-            }
-        }
-        ui->qvtkWidget_cloudViewer->update();
-    }
 }
 
 void
@@ -604,6 +635,34 @@ MainWindow::on_pushButton_OpenComm_clicked()
 }
 /*
  * SLOT
+ * @brief: serial port routine check
+ * @brief: this must be connected with commWDT timeout
+ */
+void
+MainWindow::serialPort_routine()
+{
+    for(int i = 0; i < UserComm::NUMB_OF_CMD;i++)
+    {
+        if(packetStatus_[i] == UserComm::waitingACK)
+        {
+            if(packetRetries_[i] &&
+               (packetTimeout_[i] < SERIALPORT_ACK_TIMEOUT))
+            {
+                uint8_t len = 0;
+                UserComm::PROTOCOL_CMD packetType =
+                        static_cast<UserComm::PROTOCOL_CMD>(i);
+                uint8_t *pBuf = serialPort_wrapPacket(packetType, len);
+                if(!pBuf) return;
+                emit(serialPort_write(pBuf,len));
+
+                packetRetries_[i]--;
+                packetTimeout_[i] += UART_ROUTINE_INTERVAL_MS;
+            }
+        }
+    }
+}
+/*
+ * SLOT
  * @brief: notify connection
  * @brief: this must be connected with UserComm signal
  */
@@ -615,6 +674,7 @@ MainWindow::serialPort_connected()
     ui->label_CommStatus->setText(tr("Connected @ %1, %2")
                                   .arg(comm.getPortname())
                                   .arg(comm.getBaudrate()));
+    commWDT->start(UART_ROUTINE_INTERVAL_MS);
 }
 /*
  * SLOT
@@ -627,6 +687,7 @@ MainWindow::serialPort_disconnected()
     ui->pushButton_OpenComm->setText("Connect");
 //    ui->pushButton_OpenComm->setEnabled(true);
     ui->label_CommStatus->setText("No connection");
+    commWDT->stop();
 }
 /*
  * SLOT
@@ -636,7 +697,39 @@ MainWindow::serialPort_disconnected()
 void
 MainWindow::serialPort_packetReceived(const QByteArray &data)
 {
-   std::cout << __FUNCTION__ << std::endl;
+    std::cout << __FUNCTION__ << ": ";
+    uint8_t dataLen = data[1];
+    uint8_t buf[dataLen];
+    for(int i = 0; i < dataLen; i++)
+    {
+        buf[i] = data[DATASTART_OFFSET + i] & 0xFF;
+        printf("[%02x]",buf[i]);
+    }
+    std::cout << std::endl;
+    UserComm::PROTOCOL_CMD cmd =
+            static_cast<UserComm::PROTOCOL_CMD>(buf[0]);
+    switch (cmd)
+    {
+    case UserComm::CMD_GRAB:
+    case UserComm::CMD_DROP:
+    case UserComm::CMD_MOVETOXYZ:
+    case UserComm::CMD_STOP:
+        if(buf[1] == ACK)
+           serialPort_update_PacketStatus(UserComm::idle,cmd);
+        else
+            while(1);
+        break;
+    case UserComm::CMD_ENDPOINT:
+        if(dataLen != CMD_ENDPOINT_LENGTH)
+            return;
+
+        updateEndpoint(Util_parseUint32(&buf[1]),
+                       Util_parseUint32(&buf[5]),
+                       Util_parseUint32(&buf[9]));
+        break;
+    default:
+        break;
+    }
    // TODO process data here
 }
 /*
@@ -650,15 +743,275 @@ MainWindow::serialPort_handleError(const QString &error)
    MainWindow::errorHandler(error,QMessageBox::Warning);
 }
 
-void MainWindow::on_pushButton_cmdGrab_clicked()
+/*
+ * @brief: wrap packet
+ */
+uint8_t *
+MainWindow::serialPort_wrapPacket(UserComm::PROTOCOL_CMD packetType, uint8_t &len)
 {
-    QByteArray cmdGrab = QByteArray("\xbb\x03\x00\x00\x00\x00",6);
-    emit(serialPort_write(cmdGrab));
+    switch (packetType)
+    {
+    case UserComm::CMD_GRAB:
+    case UserComm::CMD_DROP:
+    case UserComm::CMD_STOP:
+        len = 1;
+        break;
+    case UserComm::CMD_MOVETOXYZ:
+        len = 0;
+        break;
+    default:
+        len = 0;
+        break;
+    }
+
+    if(len == 0)
+        return NULL;
+
+    uint8_t *pBuf = (uint8_t*)(malloc(256)); // Will be free in UserComm::writeData
+    if(!pBuf)
+        return NULL;
+
+    uint8_t cmd = static_cast<uint8_t>(packetType);
+    pBuf[0] = cmd;
+
+    return pBuf;
 }
 
-void MainWindow::on_horizontalSlider_Filter_z_valueChanged(int value)
+/*
+ * @brief: send packet according to command
+ */
+void
+MainWindow:: serialPort_sendPacket(UserComm::PROTOCOL_CMD packetType)
+{
+    uint8_t len = 0;
+    uint8_t *pBuf = serialPort_wrapPacket(packetType, len);
+    if(!pBuf) return;
+    emit(serialPort_write(pBuf,len));
+    serialPort_update_PacketStatus(UserComm::waitingACK,packetType);
+}
+/*
+ * @brief: switch packet status to manage communication process
+ */
+void
+MainWindow::serialPort_update_PacketStatus(UserComm::packetStatus toStatus,
+                                          UserComm::PROTOCOL_CMD packetType)
+{
+    if(packetType >= UserComm::NUMB_OF_CMD)
+        return;
+
+    uint8_t idx = static_cast<uint32_t>(packetType);
+
+    packetStatus_[idx] = toStatus;
+    if(toStatus == UserComm::waitingACK)
+    {
+        // Reset timeout for retry mechanism
+        packetTimeout_[idx] = 0;
+        packetRetries_[idx] = SERIALPORT_ACK_RETRIES;
+    }
+    printf("status changed [%02x]\r\n", idx);
+    for(int i = 0; i < UserComm::NUMB_OF_CMD; i++)
+        printf("[%02x] ",static_cast<uint8_t>(packetStatus_[i]));
+    std::cout << std::endl;
+}
+/*
+ * @brief: get current packet status to manage communication process
+ */
+UserComm::packetStatus
+MainWindow::serialPort_get_PacketStatus(UserComm::PROTOCOL_CMD packetType)
+{
+    if(packetType >= UserComm::NUMB_OF_CMD)
+        return UserComm::outOfRange;
+
+    uint32_t idx = static_cast<uint32_t>(packetType);
+    return packetStatus_[idx];
+}
+
+void
+MainWindow::on_horizontalSlider_Filter_z_valueChanged(int value)
 {
     filter_z = double(value/100.0);
     QString str_z = QString::number(filter_z,'f',3);
     ui->label_Filter_z->setText(str_z);
+}
+
+void
+MainWindow::on_pushButton_trackObject_clicked()
+{
+    if(trackObject_selectedIdx_ < 0)
+    {
+        emit(errorHandler("No recognized object selected",QMSGBOX_Critical));
+        return;
+    }
+
+    if(userTracker.hasTarget())
+    {
+        userTracker.stopTracking();
+    }
+    userTracker.setReferenceCloud(recognizedObjects_[trackObject_selectedIdx_]);
+
+    // Clear visualizer
+    ui->comboBox_recognizedObjects->clear();
+    removeCloudFromViz(recognizedObjects_,REG_OBJECT_ID);
+    recognizedObjects_.clear();
+}
+
+void
+MainWindow::on_comboBox_recognizedObjects_currentIndexChanged(int index)
+{
+   trackObject_selectedIdx_ = index;
+}
+
+void
+MainWindow::on_pushButton_resetView_clicked()
+{
+   viewer_->resetCameraViewpoint("cloudpass");
+   viewer_->resetCamera();
+}
+
+void
+MainWindow::on_pushButton_toggleCoord_clicked()
+{
+   if(!viewer_->removeCoordinateSystem("coordinateSystem",0))
+   {
+       viewer_->addCoordinateSystem(1.0,"coordinateSystem",0);
+   }
+   ui->qvtkWidget_cloudViewer->update();
+}
+
+void
+MainWindow::on_pushButton_stopTracking_clicked()
+{
+    userTracker.stopTracking();
+    viewer_->removePointCloud("particleCentroid",0);
+
+    viewer_->removeAllShapes();
+}
+
+void
+MainWindow::drawResult()
+{
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr particles = userTracker.getParticleCloud();
+
+    if(particles == nullptr)
+    {
+        // Wait for next frame
+        return;
+    }
+
+    static unsigned count = 0;
+    static double last = pcl::getTime();
+    double now = pcl::getTime();
+    static double x = 0;
+    static double y = 0;
+    static double z = 0;
+    ++count;
+
+    Eigen::Vector4f c;
+    pcl::compute3DCentroid<pcl::PointXYZ> (*particles, c);
+
+    c[0] = user_rounding(c[0],3);
+    c[1] = user_rounding(c[1],3);
+    c[2] = user_rounding(c[2],3);
+
+    x += c[0];
+    y += c[1];
+    z += c[2];
+    if(now - last < 2)
+        return;
+
+//    pcl::PointXYZ centroid(c[0],c[1],c[2]);
+    pcl::PointXYZ centroid(x/count,y/count,z/count);
+
+    x = y = z = 0;
+    count = 0;
+    last = now;
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr particleCentroid(new pcl::PointCloud<pcl::PointXYZ>);
+    particleCentroid->points.push_back(centroid);
+
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> blue_color (particleCentroid, 0, 0, 255);
+    if (!viewer_->updatePointCloud (particleCentroid, blue_color, "particleCentroid"))
+    {
+        viewer_->addPointCloud(particleCentroid,"particleCentroid",0);
+        viewer_->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
+                                                  20.0, "particleCentroid");
+    }
+
+    viewer_->removeShape("R");
+    viewer_->addText((boost::format ("number of Reference PointClouds: %d") % userTracker.getReferenceCloudSize()).str(),
+                     10,20,20,
+                     1.0,1.0,1.0,
+                     "R");
+
+    viewer_->removeShape("P");
+    viewer_->addText((boost::format ("number of Particles: %d") % userTracker.getParticleSize()).str(),
+                     10,40,20,
+                     1.0,1.0,1.0,
+                     "P");
+
+    viewer_->removeShape("F");
+    viewer_->addText((boost::format ("Fit ratio: %f") % userTracker.getFitRatio()).str(),
+                     10,60,20,
+                     1.0,1.0,1.0,
+                     "F");
+
+    viewer_->removeShape("trackingFPS");
+    viewer_->addText((boost::format ("Tracking FPS : %f") % userTracker.getTrackingFPS()).str(),
+                     10,80,20,
+                     1.0,1.0,1.0,
+                     "trackingFPS");
+
+    viewer_->removeShape("C");
+    viewer_->addText((boost::format ("Centroid: [%d][%d][%d]") % c[0] % c[1] % c[2]).str(),
+                     10,100,20,
+                     1.0,1.0,1.0,
+                     "C");
+#if 0
+            {
+                std::vector<double> min_points(3,0);
+                std::vector<double> max_points(3,0);
+                userTracker.getBoundingBox(min_points[0], max_points[0],
+                                           min_points[1], max_points[1],
+                                           min_points[2], max_points[2]);
+                if(! viewer_->addCube(min_points[0], max_points[0],
+                                      min_points[1], max_points[1],
+                                      min_points[2], max_points[2]))
+                {
+                     viewer_->removeShape("cube");
+                     viewer_->addCube(min_points[0], max_points[0],
+                                      min_points[1], max_points[1],
+                                      min_points[2], max_points[2]);
+                }
+            }
+#endif
+}
+
+void
+MainWindow::updateEndpoint(float x, float y, float z)
+{
+    endpoint_x_ = x;
+    endpoint_y_ = y;
+    endpoint_z_ = z;
+
+    ui->lcdNumber_endpoint_x->display((int)(x));
+    ui->lcdNumber_endpoint_y->display((int)(y));
+    ui->lcdNumber_endpoint_z->display((int)(z));
+}
+void
+MainWindow::on_pushButton_cmdGrab_clicked()
+{
+    serialPort_sendPacket(UserComm::CMD_GRAB);
+}
+void MainWindow::on_pushButton_cmdMoveToXYZ_clicked()
+{
+    serialPort_sendPacket(UserComm::CMD_MOVETOXYZ);
+}
+void MainWindow::on_pushButton_cmdStop_clicked()
+{
+    serialPort_sendPacket(UserComm::CMD_STOP);
+}
+void MainWindow::on_pushButton_cmdDrop_clicked()
+{
+    serialPort_sendPacket(UserComm::CMD_DROP);
 }

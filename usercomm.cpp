@@ -137,15 +137,48 @@ UserComm::closeSerialPort()
    }
 }
 
+//void
+//UserComm::writeData(const QByteArray &data)
+//{
+//    if(sp_.isOpen())
+//    {
+//        std::cout << "usercomm " << __FUNCTION__ << std::endl;
+//        sp_.write(data);
+//    }
+//    else emit(errorSig("Port is not opened yet"));
+//}
 void
-UserComm::writeData(const QByteArray &data)
+UserComm::writeData(uint8_t *pData, uint8_t len)
 {
-    if(sp_.isOpen())
+    if(pData)
     {
-        std::cout << "usercomm " << __FUNCTION__ << std::endl;
-        sp_.write(data);
+        if(sp_.isOpen())
+        {
+            std::cout << "usercomm " << __FUNCTION__ << std::endl;
+            if(len > MAX_DATA_LENGTH)
+            {
+                len = MAX_DATA_LENGTH;
+                emit(errorSig("Excessive length (Max:128B)"));
+            }
+
+            // Add protocol
+            uint8_t buf[256];
+            buf[0] = HEADER_APP;
+            buf[1] = len;
+            for(int i = 0; i < len; i++)
+                buf[2+i] = pData[i];
+            buf[2+len] = mlsUtilsCRC8Calculate(pData,len);
+
+            QByteArray qBuf_ = QByteArray((char*)buf,len+OVERLOAD_SIZE);
+            sp_.write(qBuf_);
+            // push all the data immediately
+            // since Qt UART driver tends to wait and push data later
+            sp_.flush();
+        }
+        else emit(errorSig("Port is not opened yet"));
+
+        free(pData);
     }
-    else emit(errorSig("Port is not opened yet"));
 }
 
 void

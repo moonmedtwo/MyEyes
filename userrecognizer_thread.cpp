@@ -557,8 +557,10 @@ UserRecognizer_Thread::run()
     // do the hard work
     // maybe emit a signal to parentl
     std::cout << "--- " << __FUNCTION__ << " ---------" << std::endl;
+    int model_idx = 0;
     for(const auto &model_path : model_list_)
     {
+        emit(progress(0, model_idx, model_list_.size()));
         std::cout << "model at " << model_path << std::endl;
         model_.reset(new Cloud);
         pcl::PCDReader reader;
@@ -575,7 +577,9 @@ UserRecognizer_Thread::run()
         gridSample(scene_pass_,scene_keypoints_);
 #ifdef OPENNI_TRACKING_BASED_SEGMENATION_CLUSTERING
         removePlanars(scene_keypoints_,scene_without_planars_);
+        emit(progress(10, model_idx, model_list_.size()));
         cluster(scene_without_planars_,clusteredObjects_);
+        emit(progress(20, model_idx, model_list_.size()));
 #endif //OPENNI_TRACKING_BASED_SEGMENATION_CLUSTERING
 #ifdef OLD_SEGMENTATION_CLUSTERING
             extractPlanars(scene_keypoints_,planars_);
@@ -591,6 +595,7 @@ UserRecognizer_Thread::run()
 #else
          std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> >\
                  rototranslations = w_SHOT_recognizer();
+         emit(progress(50, model_idx, model_list_.size()));
          if (rototranslations.size () == 0)
          {
            // Skip to next model
@@ -609,12 +614,14 @@ UserRecognizer_Thread::run()
            instances.push_back (rotated_model);
          }
 
+         emit(progress(60, model_idx, model_list_.size()));
          std::vector<CloudConstPtr> aligned_instances = ICP_align(scene_keypoints_,instances);
          if (aligned_instances.size () == 0)
          {
            // Skip to next model
            continue;
          }
+         emit(progress(80, model_idx, model_list_.size()));
 
          /**
           * Hypothesis Verification
@@ -637,13 +644,10 @@ UserRecognizer_Thread::run()
         // Exit if result is ready
         if(found_)
         {
-            // TODO change this, emit progess bar
-//            std::stringstream ss;
-//            ss << "Found with model @ " << model_path;
-//            emit(errorHandler(QString::fromStdString(ss.str()),QMSGBOX_Info));
+            emit(progress(100, model_idx, model_list_.size()));
             return;
         }
-
+        model_idx++;
 #endif // ONLY_CLUSTERING
     }
 

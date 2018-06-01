@@ -32,7 +32,8 @@ SOURCES += \
     userrecognizer_window.cpp \
     userrecognizer_thread.cpp \
     usercomm.cpp \
-    usertracking_thread.cpp
+    usertracking.cpp \
+    util.cpp
 
 HEADERS += \
         mainwindow.h \
@@ -40,7 +41,8 @@ HEADERS += \
     userrecognizer_window.h \
     userrecognizer_thread.h \
     usercomm.h \
-    usertracking_thread.h
+    usertracking.h \
+    util.h
 
 FORMS += \
         mainwindow.ui \

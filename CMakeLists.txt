@@ -29,7 +29,9 @@ set(project_SOURCES main.cpp
     mainwindow.cpp
     userrecognizer_thread.cpp
     userrecognizer_window.cpp
-    usercomm.cpp)
+    usercomm.cpp
+    usertracking.cpp
+    util.cpp)
 
 set(project_HEADERS mainwindow.h)
 
