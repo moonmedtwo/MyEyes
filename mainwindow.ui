@@ -436,7 +436,7 @@
    <bool>false</bool>
   </property>
   <widget class="QWidget" name="centralWidget">
-   <widget class="QVTKWidget" name="qvtkWidget_cloudViewer">
+   <widget class="QVTKWidget" name="qvtkWidget_cloudViewer" native="true">
     <property name="geometry">
      <rect>
       <x>30</x>
@@ -543,29 +543,29 @@
     <property name="geometry">
      <rect>
       <x>1080</x>
-      <y>300</y>
-      <width>101</width>
-      <height>25</height>
+      <y>294</y>
+      <width>111</width>
+      <height>31</height>
      </rect>
     </property>
     <property name="text">
-     <string>Connect</string>
+     <string>CONNECT</string>
     </property>
    </widget>
    <widget class="QLabel" name="label_CommStatus">
     <property name="geometry">
      <rect>
-      <x>1090</x>
+      <x>1080</x>
       <y>330</y>
-      <width>251</width>
-      <height>21</height>
+      <width>211</width>
+      <height>31</height>
      </rect>
     </property>
     <property name="text">
      <string>No connection</string>
     </property>
     <property name="alignment">
-     <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
+     <set>Qt::AlignCenter</set>
     </property>
     <property name="wordWrap">
      <bool>true</bool>
@@ -575,23 +575,23 @@
     <property name="geometry">
      <rect>
       <x>1190</x>
-      <y>300</y>
-      <width>101</width>
-      <height>25</height>
+      <y>294</y>
+      <width>111</width>
+      <height>31</height>
      </rect>
     </property>
    </widget>
    <widget class="QPushButton" name="pushButton_cmdGrab">
     <property name="geometry">
      <rect>
-      <x>1200</x>
+      <x>1188</x>
       <y>10</y>
-      <width>89</width>
+      <width>111</width>
       <height>25</height>
      </rect>
     </property>
     <property name="text">
-     <string>Grab</string>
+     <string>GRAB</string>
     </property>
    </widget>
    <widget class="QLabel" name="label_Filter">
@@ -757,40 +757,40 @@
    <widget class="QPushButton" name="pushButton_cmdMoveToXYZ">
     <property name="geometry">
      <rect>
-      <x>1090</x>
-      <y>90</y>
-      <width>89</width>
+      <x>1080</x>
+      <y>140</y>
+      <width>111</width>
       <height>25</height>
      </rect>
     </property>
     <property name="text">
-     <string>Move to XYZ</string>
+     <string>MOVE TO XYZ</string>
     </property>
    </widget>
    <widget class="QPushButton" name="pushButton_cmdStop">
     <property name="geometry">
      <rect>
-      <x>1200</x>
-      <y>90</y>
-      <width>89</width>
+      <x>1188</x>
+      <y>140</y>
+      <width>111</width>
       <height>25</height>
      </rect>
     </property>
     <property name="text">
-     <string>Stop</string>
+     <string>STOP</string>
     </property>
    </widget>
    <widget class="QPushButton" name="pushButton_cmdDrop">
     <property name="geometry">
      <rect>
-      <x>1090</x>
+      <x>1078</x>
       <y>10</y>
-      <width>89</width>
+      <width>111</width>
       <height>25</height>
      </rect>
     </property>
     <property name="text">
-     <string>Drop</string>
+     <string>DROP</string>
     </property>
    </widget>
    <widget class="QLCDNumber" name="lcdNumber_endpoint_x">
@@ -2108,33 +2108,39 @@
     <property name="geometry">
      <rect>
       <x>1080</x>
-      <y>70</y>
-      <width>151</width>
+      <y>80</y>
+      <width>211</width>
       <height>17</height>
      </rect>
     </property>
     <property name="text">
-     <string>current position (mm)</string>
+     <string>Current position (mm)</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
    <widget class="QLabel" name="label_2">
     <property name="geometry">
      <rect>
       <x>1080</x>
-      <y>160</y>
-      <width>151</width>
+      <y>210</y>
+      <width>211</width>
       <height>17</height>
      </rect>
     </property>
     <property name="text">
-     <string>set position (mm)</string>
+     <string>Desired position (mm)</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
    <widget class="QLCDNumber" name="lcdNumber_setpoint_y">
     <property name="geometry">
      <rect>
       <x>1155</x>
-      <y>120</y>
+      <y>170</y>
       <width>64</width>
       <height>31</height>
      </rect>
@@ -2571,7 +2577,7 @@
     <property name="geometry">
      <rect>
       <x>1080</x>
-      <y>120</y>
+      <y>170</y>
       <width>64</width>
       <height>31</height>
      </rect>
@@ -3008,7 +3014,7 @@
     <property name="geometry">
      <rect>
       <x>1230</x>
-      <y>120</y>
+      <y>170</y>
       <width>64</width>
       <height>31</height>
      </rect>

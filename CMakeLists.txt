@@ -10,7 +10,7 @@ set(CMAKE_AUTOUIC ON) # UI files
 # Find includes in corresponding build directories
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # Set Error when Warning
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -lstdc++fs -Wall -Wno-comment -Werror")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -lboost_system -lstdc++fs -Wall -Wno-comment -Werror")
 
 # Find the QtWidgets library
 find_package(Qt5 REQUIRED Widgets Core Gui SerialPort)
@@ -21,7 +21,9 @@ find_package(PCL 1.7.1 REQUIRED)
 # Fix a compilation bug under ubuntu 16.04 (Xenial)
 list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
 
-include_directories(${PCL_INCLUDE_DIRS})
+include_directories(${PCL_INCLUDE_DIRS}
+                    "/usr/include/ni/"
+                    "../metslib/")
 link_directories(${PCL_LIBRARY_DIRS})
 message( "PCL_LIBRARY_DIRS " ${PCL_LIBRARY_DIRS})
 

@@ -10,6 +10,8 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 INCLUDEPATH += $$quote(/usr/include/pcl-1.7/)\
                $$quote(/usr/include/vtk-6.2/)\
+               $$quote(/usr/include/ni/)\
+               $$quote(../metslib/)\
 
 CONFIG += static
 
