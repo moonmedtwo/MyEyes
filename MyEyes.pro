@@ -11,6 +11,8 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 INCLUDEPATH += $$quote(/usr/include/pcl-1.7/)\
                $$quote(/usr/include/vtk-6.2/)\
 
+CONFIG += static
+
 TARGET = MyEyes
 TEMPLATE = app
 
@@ -33,7 +35,8 @@ SOURCES += \
     userrecognizer_thread.cpp \
     usercomm.cpp \
     usertracking.cpp \
-    util.cpp
+    util.cpp \
+    setposition_window.cpp
 
 HEADERS += \
         mainwindow.h \
@@ -42,11 +45,17 @@ HEADERS += \
     userrecognizer_thread.h \
     usercomm.h \
     usertracking.h \
-    util.h
+    util.h \
+    setposition_window.h
 
 FORMS += \
         mainwindow.ui \
-    userRecognizer_window.ui
+    userRecognizer_window.ui \
+    setposition_window.ui
 
 DISTFILES += \
-    CMakeLists.txt
+    CMakeLists.txt \
+    misc/icons8-robot-100.ico
+
+STATECHARTS += \
+    AppStateChart.scxml

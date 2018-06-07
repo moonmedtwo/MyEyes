@@ -20,6 +20,7 @@
 #include "userrecognizer_window.h"
 #include "usercomm.h"
 #include "usertracking.h"
+#include "setposition_window.h"
 
 
 enum grabberState
@@ -86,6 +87,9 @@ public:
 
     void
     updateEndpoint(float x,float y, float z);
+
+    void
+    updateSetpoint(float x, float y, float z);
 
 public slots:
     void
@@ -166,6 +170,10 @@ protected:
     float endpoint_x_;
     float endpoint_y_;
     float endpoint_z_;
+
+    float setpoint_x_;
+    float setpoint_y_;
+    float setpoint_z_;
 
 private slots:
     void on_pushButton_restartGrabber_clicked();

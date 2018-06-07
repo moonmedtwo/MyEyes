@@ -12,6 +12,8 @@
 #define SERIALPORT_ACK_TIMEOUT	 			5000
 #define SERIALPORT_ACK_RETRIES 				3
 #define SERIALPORT_INTERVAL_BETWEEN_RETRY   (SERIALPORT_TIMEOUT/SERIALPORT_RETRIES) // 50 = 2.5 * STM_UART_CHECK_INTERVAL
+#define SERIALPORT_ROUTINE_TIMEOUT			5000
+#define SERIALPORT_ROUTINE_RETRIES			(SERIALPORT_ROUTINE_TIMEOUT/UART_ROUTINE_INTERVAL_MS)
 typedef typename pcl::visualization::PointCloudColorHandlerCustom<PointType> ColorHandler;
 
 /*****************************************
@@ -220,6 +222,10 @@ MainWindow::~MainWindow()
     if(grabber_->isRunning())
         grabber_->stop();
 
+    delete grabber_;
+    delete grabberWDT;
+    delete commWDT;
+
     delete ui;
 }
 /*
@@ -346,6 +352,9 @@ MainWindow::serialPort_init()
         commWDT = new QTimer;
 
     connect(commWDT,SIGNAL(timeout()),this,SLOT(serialPort_routine()));
+
+    // Manage connection live
+    packetRetries_[static_cast<int>(UserComm::CMD_ENDPOINT)] = SERIALPORT_ROUTINE_RETRIES;
 }
 /*
  * SLOT
@@ -625,7 +634,7 @@ MainWindow::on_Comm_comboBox_currentTextChanged(const QString &arg1)
 void
 MainWindow::on_pushButton_OpenComm_clicked()
 {
-   if(!comm.isOpen())
+   if(!QString::compare(ui->pushButton_OpenComm->text(),"Connect"))
        emit(openSerialPort());
    else
        emit(closeSerialPort());
@@ -660,6 +669,13 @@ MainWindow::serialPort_routine()
             }
         }
     }
+
+    uint8_t &connRetries =  packetRetries_[static_cast<int>(UserComm::CMD_ENDPOINT)];
+    connRetries--;
+    if(!connRetries)
+    {
+        serialPort_disconnected();
+    }
 }
 /*
  * SLOT
@@ -675,6 +691,9 @@ MainWindow::serialPort_connected()
                                   .arg(comm.getPortname())
                                   .arg(comm.getBaudrate()));
     commWDT->start(UART_ROUTINE_INTERVAL_MS);
+    QPalette pal = this->palette();
+    pal.setColor(QPalette::Window,Qt::cyan);
+    this->setPalette(pal);
 }
 /*
  * SLOT
@@ -688,6 +707,9 @@ MainWindow::serialPort_disconnected()
 //    ui->pushButton_OpenComm->setEnabled(true);
     ui->label_CommStatus->setText("No connection");
     commWDT->stop();
+    QPalette pal = this->palette();
+    pal.setColor(QPalette::Window,Qt::white);
+    this->setPalette(pal);
 }
 /*
  * SLOT
@@ -720,12 +742,18 @@ MainWindow::serialPort_packetReceived(const QByteArray &data)
             while(1);
         break;
     case UserComm::CMD_ENDPOINT:
+        packetRetries_[static_cast<int>(UserComm::CMD_ENDPOINT)] = SERIALPORT_ACK_RETRIES;
         if(dataLen != CMD_ENDPOINT_LENGTH)
             return;
 
-        updateEndpoint(Util_parseUint32(&buf[1]),
-                       Util_parseUint32(&buf[5]),
-                       Util_parseUint32(&buf[9]));
+        updateEndpoint(Util_parseFloat(&buf[1]),
+                       Util_parseFloat(&buf[5]),
+                       Util_parseFloat(&buf[9]));
+
+        // Manage connection live
+        packetRetries_[static_cast<int>(UserComm::CMD_ENDPOINT)] = SERIALPORT_ROUTINE_RETRIES;
+        serialPort_connected();
+
         break;
     default:
         break;
@@ -757,7 +785,7 @@ MainWindow::serialPort_wrapPacket(UserComm::PROTOCOL_CMD packetType, uint8_t &le
         len = 1;
         break;
     case UserComm::CMD_MOVETOXYZ:
-        len = 0;
+        len = 13;
         break;
     default:
         len = 0;
@@ -774,11 +802,16 @@ MainWindow::serialPort_wrapPacket(UserComm::PROTOCOL_CMD packetType, uint8_t &le
     uint8_t cmd = static_cast<uint8_t>(packetType);
     pBuf[0] = cmd;
 
+    if(packetType == UserComm::CMD_MOVETOXYZ)
+    {
+       Util_bufferFloat(pBuf+1,setpoint_x_);
+       Util_bufferFloat(pBuf+5,setpoint_y_);
+       Util_bufferFloat(pBuf+9,setpoint_z_);
+    }
+
     return pBuf;
 }
-
-/*
- * @brief: send packet according to command
+ /* * @brief: send packet according to command
  */
 void
 MainWindow:: serialPort_sendPacket(UserComm::PROTOCOL_CMD packetType)
@@ -994,10 +1027,23 @@ MainWindow::updateEndpoint(float x, float y, float z)
     endpoint_y_ = y;
     endpoint_z_ = z;
 
-    ui->lcdNumber_endpoint_x->display((int)(x));
-    ui->lcdNumber_endpoint_y->display((int)(y));
-    ui->lcdNumber_endpoint_z->display((int)(z));
+    ui->lcdNumber_endpoint_x->display((int)(x*1000));
+    ui->lcdNumber_endpoint_y->display((int)(y*1000));
+    ui->lcdNumber_endpoint_z->display((int)(z*1000));
 }
+
+void
+MainWindow::updateSetpoint(float x, float y, float z)
+{
+    setpoint_x_ = x;
+    setpoint_y_ = y;
+    setpoint_z_ = z;
+
+    ui->lcdNumber_setpoint_x->display((int)(x*1000));
+    ui->lcdNumber_setpoint_y->display((int)(y*1000));
+    ui->lcdNumber_setpoint_z->display((int)(z*1000));
+}
+
 void
 MainWindow::on_pushButton_cmdGrab_clicked()
 {
@@ -1005,6 +1051,16 @@ MainWindow::on_pushButton_cmdGrab_clicked()
 }
 void MainWindow::on_pushButton_cmdMoveToXYZ_clicked()
 {
+    setPosition_window myWindow(this);
+    myWindow.exec();
+
+    if(myWindow.result() != QDialog::Accepted)
+    {
+        return;
+    }
+    updateSetpoint((float)(myWindow.setX_mm/1000.f),
+                   (float)(myWindow.setY_mm/1000.f),
+                   (float)(myWindow.setZ_mm/1000.f));
     serialPort_sendPacket(UserComm::CMD_MOVETOXYZ);
 }
 void MainWindow::on_pushButton_cmdStop_clicked()

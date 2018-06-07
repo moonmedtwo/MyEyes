@@ -23,6 +23,8 @@ list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
 
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
+message( "PCL_LIBRARY_DIRS " ${PCL_LIBRARY_DIRS})
+
 add_definitions(${PCL_DEFINITIONS})
 
 set(project_SOURCES main.cpp
@@ -31,12 +33,15 @@ set(project_SOURCES main.cpp
     userrecognizer_window.cpp
     usercomm.cpp
     usertracking.cpp
+    setposition_window.cpp
     util.cpp)
 
 set(project_HEADERS mainwindow.h)
 
+
 add_executable(${PROJECT_NAME} ${project_SOURCES})
 
 target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES})
+#set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "-static" )
 
 qt5_use_modules(${PROJECT_NAME} Widgets Core Gui SerialPort)
