@@ -91,6 +91,13 @@ public:
     void
     updateSetpoint(float x, float y, float z);
 
+    void
+    updateCamRototranslationMat(float val,int rows, int cols);
+
+    Eigen::Vector4f
+    Cam_vs_Robot_Rototranslation(Eigen::Vector4f &cam_coordinates,
+                                 Eigen::Matrix4f &rototranslation);
+
 public slots:
     void
     updateViewer();
@@ -118,6 +125,9 @@ public slots:
 
     void
     errorHandler(const QString &error,int type);
+
+    void
+    textEditChanged();
 
 signals:
     void
@@ -174,6 +184,9 @@ protected:
     float setpoint_x_;
     float setpoint_y_;
     float setpoint_z_;
+
+    float distToRobot_;  // camera calibration purpose
+    Eigen::Matrix4f cam_rototranslation_mat_;
 
 private slots:
     void on_pushButton_restartGrabber_clicked();

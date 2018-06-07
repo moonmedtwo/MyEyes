@@ -269,15 +269,58 @@ MainWindow::kinect_init()
        delete grabber_;
        grabber_ = NULL;
    }
-//   if(grabberWDT)
-//   {
-//       delete grabberWDT;
-//       grabberWDT = NULL;
-//   }
-   // Kinect image grabber
+
+//   // Kinect image grabber
+//   if(!grabberWDT)
+//    grabberWDT = new QTimer;
+//   connect(grabberWDT,SIGNAL(timeout()),this,SLOT(grabberDie()));
+
+   // First time init
    if(!grabberWDT)
-    grabberWDT = new QTimer;
-   connect(grabberWDT,SIGNAL(timeout()),this,SLOT(grabberDie()));
+   {
+       grabberWDT = new QTimer;
+       connect(grabberWDT,SIGNAL(timeout()),this,SLOT(grabberDie()));
+
+       connect(ui->text_roto00,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+       connect(ui->text_roto01,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+       connect(ui->text_roto02,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+       connect(ui->text_roto03,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+
+       connect(ui->text_roto10,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+       connect(ui->text_roto11,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+       connect(ui->text_roto12,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+       connect(ui->text_roto13,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+
+       connect(ui->text_roto20,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+       connect(ui->text_roto21,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+       connect(ui->text_roto22,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+       connect(ui->text_roto23,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+
+       connect(ui->text_roto30,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+       connect(ui->text_roto31,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+       connect(ui->text_roto32,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+       connect(ui->text_roto33,SIGNAL(textChanged()),this,SLOT(textEditChanged()));
+
+       ui->text_roto00->setText("0");
+       ui->text_roto01->setText("0");
+       ui->text_roto02->setText("-1");
+       ui->text_roto03->setText("0");
+
+       ui->text_roto10->setText("1");
+       ui->text_roto11->setText("0");
+       ui->text_roto12->setText("0");
+       ui->text_roto13->setText("0");
+
+       ui->text_roto20->setText("0");
+       ui->text_roto21->setText("-1");
+       ui->text_roto22->setText("0");
+       ui->text_roto23->setText("0.055");
+
+       ui->text_roto30->setText("0");
+       ui->text_roto31->setText("0");
+       ui->text_roto32->setText("0");
+       ui->text_roto33->setText("1");
+   }
 
    try
    {
@@ -948,8 +991,6 @@ MainWindow::drawResult()
     c[1] = user_rounding(c[1],3);
     c[2] = user_rounding(c[2],3);
 
-
-
     x += c[0];
     y += c[1];
     z += c[2];
@@ -1005,7 +1046,13 @@ MainWindow::drawResult()
                      10,100,20,
                      1.0,1.0,1.0,
                      "C");
-    updateSetpoint(c[0],c[1],c[2]);
+
+    Eigen::Vector4f cam_coords = {c[0],c[1],c[2],1};
+    Eigen::Vector4f target_robot_coords = Cam_vs_Robot_Rototranslation(cam_coords,
+                                                                       cam_rototranslation_mat_);
+    updateSetpoint(target_robot_coords[0],
+                   target_robot_coords[1],
+                   target_robot_coords[2]);
 #if 0
             {
                 std::vector<double> min_points(3,0);
@@ -1076,4 +1123,46 @@ void MainWindow::on_pushButton_cmdStop_clicked()
 void MainWindow::on_pushButton_cmdDrop_clicked()
 {
     serialPort_sendPacket(UserComm::CMD_DROP);
+}
+
+Eigen::Vector4f
+MainWindow::Cam_vs_Robot_Rototranslation(Eigen::Vector4f &cam_coordinates,
+                                         Eigen::Matrix4f &rototranslation)
+{
+    return rototranslation*cam_coordinates;
+}
+void
+MainWindow::updateCamRototranslationMat(float val,int rows, int cols)
+{
+    if(rows < 0 && rows > 3) return;
+    if(cols < 0 && cols > 3) return;
+
+    cam_rototranslation_mat_(rows,cols) = val;
+
+//    std::cout << cam_rototranslation_mat_ << std::endl;
+}
+/*
+ * SLOT
+ */
+void
+MainWindow::textEditChanged()
+{
+    QTextEdit *_text = qobject_cast<QTextEdit*>(sender());
+    if( _text == ui->text_roto00 || _text == ui->text_roto01 ||
+        _text == ui->text_roto02 || _text == ui->text_roto03 ||
+
+        _text == ui->text_roto10 || _text == ui->text_roto11 ||
+        _text == ui->text_roto12 || _text == ui->text_roto13 ||
+
+        _text == ui->text_roto20 || _text == ui->text_roto21 ||
+        _text == ui->text_roto22 || _text == ui->text_roto23 ||
+
+        _text == ui->text_roto30 || _text == ui->text_roto31 ||
+        _text == ui->text_roto32 || _text == ui->text_roto33)
+    {
+        int rows = _text->objectName().at(9).unicode() - 48;
+        int cols = _text->objectName().at(10).unicode() - 48;
+        float val = _text->toPlainText().toFloat();
+        updateCamRototranslationMat(val,rows,cols);
+    }
 }
