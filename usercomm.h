@@ -10,6 +10,8 @@
 #include <QObject>
 #include <QSerialPort>
 
+#include "user_debug.h"
+
 #define HEADER_STM32   					0xCC
 #define HEADER_APP     					0xBB
 
@@ -66,7 +68,7 @@ public:
       CMD_DROP          = 0x02,
       CMD_STOP          = 0x03,
       CMD_ENDPOINT		= 0x04,
-      CMD_TRACKPOINT	= 0x05,
+      CMD_OUTOFRANGE    = 0x05,
       NUMB_OF_CMD,
       CMD_ERROR         = 0xFF,
     };
@@ -114,8 +116,6 @@ public slots:
     openSerialPort();
     void
     closeSerialPort();
-//    void
-//    writeData(const QByteArray &data);
     void
     writeData(uint8_t *pData, uint8_t len);
 

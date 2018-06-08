@@ -178,9 +178,9 @@ w_SHOT_recognizer()
 
     /* choose keypoints */
     scene_keypoints_.reset(new Cloud);
-    gridSample(scene_pass_,scene_keypoints_);
+    gridSample(scene_pass_,scene_keypoints_,DOWN_SAMPLE_RESOLUTION);
     model_keypoints_.reset(new Cloud);
-    gridSample(model_,model_keypoints_);
+    gridSample(model_,model_keypoints_,DOWN_SAMPLE_RESOLUTION);
     std::cout << "Swap scene_kp by the one with all planars removed" << std::endl;
     removePlanars(scene_keypoints_,scene_without_planars_);
     scene_keypoints_.swap(scene_without_planars_);
@@ -534,7 +534,6 @@ UserRecognizer_Thread::computeSHOTs_OMP(const CloudConstPtr &cloud_downSampled,
 /*
  * @brief: compute shot utilising OpenMP
  * note: normal size must equal to cloud size
- * note: and this can be achieve ball_clusteredy using the non-downsampled cloud
  */
 void
 UserRecognizer_Thread::computeSHOTs_OMP(const CloudConstPtr &cloud_downSampled,
@@ -574,12 +573,12 @@ UserRecognizer_Thread::run()
             continue;
         }
         scene_keypoints_.reset(new Cloud);
-        gridSample(scene_pass_,scene_keypoints_);
+        gridSample(scene_pass_,scene_keypoints_,DOWN_SAMPLE_RESOLUTION);
 #ifdef OPENNI_TRACKING_BASED_SEGMENATION_CLUSTERING
         removePlanars(scene_keypoints_,scene_without_planars_);
         emit(progress(10, model_idx, model_list_.size()));
         cluster(scene_without_planars_,clusteredObjects_);
-        emit(progress(20, model_idx, model_list_.size()));
+        emit(progress(50, model_idx, model_list_.size()));
 #endif //OPENNI_TRACKING_BASED_SEGMENATION_CLUSTERING
 #ifdef OLD_SEGMENTATION_CLUSTERING
             extractPlanars(scene_keypoints_,planars_);
@@ -614,14 +613,14 @@ UserRecognizer_Thread::run()
            instances.push_back (rotated_model);
          }
 
-         emit(progress(60, model_idx, model_list_.size()));
+         emit(progress(70, model_idx, model_list_.size()));
          std::vector<CloudConstPtr> aligned_instances = ICP_align(scene_keypoints_,instances);
          if (aligned_instances.size () == 0)
          {
            // Skip to next model
            continue;
          }
-         emit(progress(80, model_idx, model_list_.size()));
+         emit(progress(99, model_idx, model_list_.size()));
 
          /**
           * Hypothesis Verification

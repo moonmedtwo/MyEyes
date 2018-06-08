@@ -3,7 +3,6 @@
 
 
 #include <QMainWindow>
-#include <commons.h>
 
 #include <QMutex>
 #include <QTimer>
@@ -21,7 +20,8 @@
 #include "usercomm.h"
 #include "usertracking.h"
 #include "setposition_window.h"
-
+#include "user_debug.h"
+#include <user_commons.h>
 
 enum grabberState
 {
@@ -92,6 +92,9 @@ public:
     updateSetpoint(float x, float y, float z);
 
     void
+    updateControlError();
+
+    void
     updateCamRototranslationMat(float val,int rows, int cols);
 
     Eigen::Vector4f
@@ -137,8 +140,6 @@ signals:
     openSerialPort();
     void
     closeSerialPort();
-//    void
-//    serialPort_write(const QByteArray &data);
     void
     serialPort_write(uint8_t *pData, uint8_t len);
 
@@ -185,6 +186,15 @@ protected:
     float setpoint_y_;
     float setpoint_z_;
 
+    Eigen::Vector3f lastSentPoint_;
+
+    float controlError_;
+    float movableDistance_;
+    bool  isRefFitnessSet_;
+    int   bad_fitness_tolerances_;
+    float fitness_threshold_;
+    bool isValidToSend_;			// tweak for safty reason
+
     float distToRobot_;  // camera calibration purpose
     Eigen::Matrix4f cam_rototranslation_mat_;
 
@@ -203,6 +213,10 @@ private slots:
     void on_pushButton_cmdMoveToXYZ_clicked();
     void on_pushButton_cmdStop_clicked();
     void on_pushButton_cmdDrop_clicked();
+    void keyPressEvent(QKeyEvent *event);
+    void on_horizontalSlider_movableDistance_valueChanged(int value);
+    void on_horizontalSlider_badFitnessTolerances_valueChanged(int value);
+    void on_horizontalSlider_fitnessThreshold_valueChanged(int value);
 };
 
 #endif // MAINWINDOW_H

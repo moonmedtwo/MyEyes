@@ -5,8 +5,6 @@
  *  Vu Quoc Anh - vu.quoc.anh.ee@gmail.com
  */
 
-#include <iostream>
-
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/console/parse.h>
@@ -18,6 +16,7 @@
 #include <ctime>
 
 #include <boost/format.hpp>
+
 
 #define QMSGBOX_NoICon 		0
 #define QMSGBOX_Info 		1
@@ -44,6 +43,7 @@ Q_DECLARE_METATYPE(std::vector<CloudPtr>);
 #define SCENE_ROOT	  "/home/vuquocanh/Documents/pcl/user_scene/"
 #define DEFAULT_MODEL_DIR "/home/vuquocanh/Documents/pcl/user_database/sapporo_blue/"
 
+#define DOWN_SAMPLE_RESOLUTION	(0.01f)
 #define FPS_CALC(_WHAT_) \
 do \
 { \

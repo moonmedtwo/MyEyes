@@ -42,13 +42,14 @@ SOURCES += \
 
 HEADERS += \
         mainwindow.h \
-    commons.h \
     userrecognizer_window.h \
     userrecognizer_thread.h \
     usercomm.h \
     usertracking.h \
     util.h \
-    setposition_window.h
+    setposition_window.h \
+    user_debug.h \
+    user_commons.h
 
 FORMS += \
         mainwindow.ui \

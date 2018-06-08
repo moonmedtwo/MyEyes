@@ -3,7 +3,7 @@
 
 
 #include <QObject>
-#include "commons.h"
+#include <QMutex>
 
 #include <pcl/tracking/tracking.h>
 #include <pcl/tracking/particle_filter.h>
@@ -18,6 +18,7 @@
 #include <pcl/tracking/approx_nearest_pair_point_cloud_coherence.h>
 #include <pcl/tracking/nearest_pair_point_cloud_coherence.h>
 
+#include "user_commons.h"
 
 typedef pcl::tracking::ParticleXYZRPY ParticleT;
 typedef pcl::tracking::ParticleFilterOMPTracker<PointType, ParticleT> ParticleFilter;
@@ -42,8 +43,16 @@ public:
     void
     stopTracking()
     {
-        tracker_->resetTracking();
-        hasTarget_ = false;
+        if(tracker_mutex_.tryLock(500))
+        {
+            tracker_->resetTracking();
+            hasTarget_ = false;
+            tracker_mutex_.unlock();
+        }
+        else
+        {
+            emit errorHandler("Cannot stop tracker",QMSGBOX_Critical);
+        }
     }
 
     bool
@@ -145,11 +154,11 @@ public:
         return 1.0/tracking_time_;
     }
 
-
     boost::shared_ptr<ParticleFilter> tracker_;
     double tracking_time_;
 
     CloudPtr reference_;
+    QMutex tracker_mutex_;
 
 signals:
     void

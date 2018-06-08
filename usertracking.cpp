@@ -1,9 +1,8 @@
 #include "usertracking.h"
-
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/approximate_voxel_grid.h>
 
-#define PARTICLES_NR	400
+#define PARTICLES_NR	100
 void removeZeroPoints (const CloudConstPtr &cloud,
                        Cloud &result)
 {
@@ -50,7 +49,7 @@ UserTracking::UserTracking(QObject *parent, int thread_nr)
     : QObject(parent),
       tracking_time_(1),
       hasTarget_(false),
-      downsampling_grid_size_(0.01)
+      downsampling_grid_size_(DOWN_SAMPLE_RESOLUTION)
 {
     boost::shared_ptr<ParticleFilterOMPTracker<PointType, ParticleT> > tracker
         (new ParticleFilterOMPTracker<PointType, ParticleT> (thread_nr));
@@ -68,11 +67,12 @@ UserTracking::UserTracking(QObject *parent, int thread_nr)
     tracker_->setStepNoiseCovariance (default_step_covariance);
     tracker_->setInitialNoiseCovariance (initial_noise_covariance);
     tracker_->setInitialNoiseMean (default_initial_mean);
-    tracker_->setIterationNum (1);
+    tracker_->setIterationNum (2);
 
     tracker_->setParticleNum (PARTICLES_NR);
     tracker_->setResampleLikelihoodThr(0.00);
     tracker_->setUseNormal (false);
+//    tracker_->use_change_detector_ = true;
 
 
     // setup coherences
@@ -115,7 +115,7 @@ UserTracking::setReferenceCloud(const CloudConstPtr &target)
     CloudPtr nonzero_ref(new Cloud);
     removeZeroPoints(target,*nonzero_ref);
 
-    PCL_INFO ("calculating cog\n");
+    PCL_INFO ("calculating centor of gravity\n");
 
     CloudPtr transed_ref (new Cloud);
     Eigen::Vector4f c;
@@ -145,7 +145,12 @@ UserTracking::tracking(const CloudPtr &cloud)
 {
     double start = pcl::getTime ();
     tracker_->setInputCloud (cloud);
+
+    // Protected against deletion
+    tracker_mutex_.lock();
     tracker_->compute ();
+    tracker_mutex_.unlock();
+
     double end = pcl::getTime ();
     tracking_time_ = end - start;
 }

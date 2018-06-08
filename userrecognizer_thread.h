@@ -9,7 +9,7 @@
 #define USERRECOGNIZER_THREAD_H
 
 #include <QThread>
-#include "commons.h"
+#include "user_commons.h"
 #include <vector>
 
 #include <pcl/filters/extract_indices.h>
@@ -61,7 +61,7 @@ public:
 
     void
     gridSample(const CloudConstPtr &cloud, const CloudPtr &result,
-               double leaf_size = 0.01);
+               double leaf_size = DOWN_SAMPLE_RESOLUTION);
     void
     computeNormals_OMP(const CloudConstPtr &cloud,
                    pcl::PointCloud<pcl::Normal>::Ptr &result);

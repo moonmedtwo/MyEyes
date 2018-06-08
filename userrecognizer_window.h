@@ -2,8 +2,6 @@
 #define USERRECOGNIZER_WINDOW_H
 
 #include <QDialog>
-//#include <mainwindow.h>
-#include "commons.h"
 
 #include <vtkRenderWindow.h>
 
@@ -12,6 +10,8 @@
 
 #include <QDir>
 #include <QFileDialog>
+
+#include "user_commons.h"
 
 namespace Ui {
 class UserRecognizer_Window;

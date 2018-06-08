@@ -1,6 +1,7 @@
 #include "usercomm.h"
-#include <iostream>
+
 #include <QMessageBox>
+#include <QSerialPort>
 
 /*
  * PROTOCOL:
@@ -137,16 +138,6 @@ UserComm::closeSerialPort()
    }
 }
 
-//void
-//UserComm::writeData(const QByteArray &data)
-//{
-//    if(sp_.isOpen())
-//    {
-//        std::cout << "usercomm " << __FUNCTION__ << std::endl;
-//        sp_.write(data);
-//    }
-//    else emit(errorSig("Port is not opened yet"));
-//}
 void
 UserComm::writeData(uint8_t *pData, uint8_t len)
 {
@@ -154,7 +145,9 @@ UserComm::writeData(uint8_t *pData, uint8_t len)
     {
         if(sp_.isOpen())
         {
+#if DEBUG_LEVEL < 3
             std::cout << "usercomm " << __FUNCTION__ << std::endl;
+#endif
             if(len > MAX_DATA_LENGTH)
             {
                 len = MAX_DATA_LENGTH;
@@ -174,6 +167,11 @@ UserComm::writeData(uint8_t *pData, uint8_t len)
             // push all the data immediately
             // since Qt UART driver tends to wait and push data later
             sp_.flush();
+#if DEBUG_LEVEL <= 2
+            for(int i = 0; i<len+OVERLOAD_SIZE;i++)
+                printf("[%02x]",buf[i]);
+            std::cout << std::endl;
+#endif
         }
         else emit(errorSig("Port is not opened yet"));
 

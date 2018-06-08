@@ -3,10 +3,13 @@
 #include <QMessageBox>
 #include <QSerialPortInfo>
 #include <string>
+#include <QKeyEvent>
 
 #include "util.h"
 
 #define REG_OBJECT_ID "regObj_"
+#define DRAW_PARTICLE_CLOUD
+#define	DRAW_PARTICLE_CENTROID
 
 #define GRABBER_TIMEOUT	    				10000
 #define SERIALPORT_ACK_TIMEOUT	 			5000
@@ -14,12 +17,26 @@
 #define SERIALPORT_INTERVAL_BETWEEN_RETRY   (SERIALPORT_TIMEOUT/SERIALPORT_RETRIES) // 50 = 2.5 * STM_UART_CHECK_INTERVAL
 #define SERIALPORT_ROUTINE_TIMEOUT			5000
 #define SERIALPORT_ROUTINE_RETRIES			(SERIALPORT_ROUTINE_TIMEOUT/UART_ROUTINE_INTERVAL_MS)
+
+#define TRACKING_AVERAGE_TIME				1
 typedef typename pcl::visualization::PointCloudColorHandlerCustom<PointType> ColorHandler;
 
 /*****************************************
  * UTIL FUNTIONS *************************
  *****************************************/
 
+/*
+ * @brief: calculate euclidean distance
+ */
+inline
+float
+euclideanDistance(float &x1, float &y1, float z1,
+                  float &x2, float &y2, float z2)
+{
+    return sqrt((x2-x1)*(x2-x1)+
+                (y2-y1)*(y2-y1)+
+                (z2-z1)*(z2-z1));
+}
 /*
  * @brief: round to n decimal places
  */
@@ -206,7 +223,19 @@ MainWindow::MainWindow(QWidget *parent) :
 
     commWDT(NULL),
     filter_z(10),
-    trackObject_selectedIdx_(-1)
+    trackObject_selectedIdx_(-1),
+
+    setpoint_x_(0.364),
+    setpoint_y_(0),
+    setpoint_z_(0.092),
+
+    lastSentPoint_(0,0,0),
+    controlError_(0),
+    movableDistance_(0.02),
+    isRefFitnessSet_(false),
+    bad_fitness_tolerances_(20),
+    fitness_threshold_(0.9),
+    isValidToSend_(false)
 {
     PRINT_CURRENT_TIME(__FUNCTION__);
     ui->setupUi(this);
@@ -423,7 +452,6 @@ MainWindow::updateViewer()
             viewer_->addPointCloud(cloud_pass_,"cloudpass");
             viewer_->resetCameraViewpoint("cloudpass");
             viewer_->resetCamera();
-//            viewer_->addCoordinateSystem(1,"XYZcoordinates",0);
         }
         new_cloud_ = false;
         cloud_mtx_.unlock();
@@ -681,9 +709,6 @@ MainWindow::on_pushButton_OpenComm_clicked()
        emit(openSerialPort());
    else
        emit(closeSerialPort());
-
-   // Disable till port is opened or closed
-//   ui->pushButton_OpenComm->setEnabled(false);
 }
 /*
  * SLOT
@@ -710,6 +735,13 @@ MainWindow::serialPort_routine()
                 packetRetries_[i]--;
                 packetTimeout_[i] += UART_ROUTINE_INTERVAL_MS;
             }
+            else
+            {
+                QPalette pal = ui->label_CommRsp->palette();
+                pal.setColor(QPalette::WindowText,Qt::red);
+                ui->label_CommRsp->setPalette(pal);
+                ui->label_CommRsp->setText("NO ACK");
+            }
         }
     }
 
@@ -729,14 +761,19 @@ void
 MainWindow::serialPort_connected()
 {
     ui->pushButton_OpenComm->setText("Disconnect");
-//    ui->pushButton_OpenComm->setEnabled(true);
+    commWDT->start(UART_ROUTINE_INTERVAL_MS);
+    QPalette pal = this->palette();
+    pal.setColor(QPalette::Window,Qt::lightGray);
+    this->setPalette(pal);
+
+    QPalette labelPal = ui->label_CommStatus->palette();
+    labelPal.setColor(QPalette::WindowText,Qt::blue);
+    ui->label_CommStatus->setPalette(labelPal);
+    ui->label_CommStatus->setFont(QFont("Ubuntu",12, QFont::Bold));
     ui->label_CommStatus->setText(tr("Connected @ %1, %2")
                                   .arg(comm.getPortname())
                                   .arg(comm.getBaudrate()));
-    commWDT->start(UART_ROUTINE_INTERVAL_MS);
-    QPalette pal = this->palette();
-    pal.setColor(QPalette::Window,Qt::cyan);
-    this->setPalette(pal);
+    ui->label_CommRsp->show();
 }
 /*
  * SLOT
@@ -747,12 +784,18 @@ void
 MainWindow::serialPort_disconnected()
 {
     ui->pushButton_OpenComm->setText("Connect");
-//    ui->pushButton_OpenComm->setEnabled(true);
-    ui->label_CommStatus->setText("No connection");
     commWDT->stop();
     QPalette pal = this->palette();
     pal.setColor(QPalette::Window,Qt::white);
     this->setPalette(pal);
+
+    QPalette labelPal = ui->label_CommStatus->palette();
+    labelPal.setColor(QPalette::WindowText,Qt::black);
+    ui->label_CommStatus->setPalette(labelPal);
+
+    ui->label_CommStatus->setFont(QFont("Ubuntu",20));
+    ui->label_CommStatus->setText("No connection");
+    ui->label_CommRsp->hide();
 }
 /*
  * SLOT
@@ -768,7 +811,11 @@ MainWindow::serialPort_packetReceived(const QByteArray &data)
     for(int i = 0; i < dataLen; i++)
     {
         buf[i] = data[DATASTART_OFFSET + i] & 0xFF;
+
+#if DEBUG_LEVEL <= 1
         printf("[%02x]",buf[i]);
+#endif
+
     }
     std::cout << std::endl;
     UserComm::PROTOCOL_CMD cmd =
@@ -779,12 +826,30 @@ MainWindow::serialPort_packetReceived(const QByteArray &data)
     case UserComm::CMD_DROP:
     case UserComm::CMD_MOVETOXYZ:
     case UserComm::CMD_STOP:
+    {
         if(buf[1] == ACK)
+        {
+           QPalette pal = ui->label_CommRsp->palette();
+           pal.setColor(QPalette::WindowText,Qt::darkGreen);
+           ui->label_CommRsp->setPalette(pal);
+           ui->label_CommRsp->setText("Acknowledged");
+
            serialPort_update_PacketStatus(UserComm::idle,cmd);
+        }
         else
             while(1);
+    }
+        break;
+    case UserComm::CMD_OUTOFRANGE:
+    {
+        QPalette pal = ui->label_CommRsp->palette();
+        pal.setColor(QPalette::WindowText,Qt::yellow);
+        ui->label_CommRsp->setPalette(pal);
+        ui->label_CommRsp->setText("OUT OF RANGE");
+    }
         break;
     case UserComm::CMD_ENDPOINT:
+    {
         packetRetries_[static_cast<int>(UserComm::CMD_ENDPOINT)] = SERIALPORT_ACK_RETRIES;
         if(dataLen != CMD_ENDPOINT_LENGTH)
             return;
@@ -793,15 +858,15 @@ MainWindow::serialPort_packetReceived(const QByteArray &data)
                        Util_parseFloat(&buf[5]),
                        Util_parseFloat(&buf[9]));
 
+        updateControlError();
         // Manage connection live
         packetRetries_[static_cast<int>(UserComm::CMD_ENDPOINT)] = SERIALPORT_ROUTINE_RETRIES;
         serialPort_connected();
-
+    }
         break;
     default:
         break;
     }
-   // TODO process data here
 }
 /*
  * SLOT
@@ -850,6 +915,10 @@ MainWindow::serialPort_wrapPacket(UserComm::PROTOCOL_CMD packetType, uint8_t &le
        Util_bufferFloat(pBuf+1,setpoint_x_);
        Util_bufferFloat(pBuf+5,setpoint_y_);
        Util_bufferFloat(pBuf+9,setpoint_z_);
+
+       lastSentPoint_[0] = setpoint_x_;
+       lastSentPoint_[1] = setpoint_y_;
+       lastSentPoint_[2] = setpoint_z_;
     }
 
     return pBuf;
@@ -859,6 +928,11 @@ MainWindow::serialPort_wrapPacket(UserComm::PROTOCOL_CMD packetType, uint8_t &le
 void
 MainWindow:: serialPort_sendPacket(UserComm::PROTOCOL_CMD packetType)
 {
+    if(!comm.isOpen())
+    {
+        errorHandler("Port is not opened",QMSGBOX_Warning);
+        return;
+    }
     uint8_t len = 0;
     uint8_t *pBuf = serialPort_wrapPacket(packetType, len);
     if(!pBuf) return;
@@ -884,10 +958,6 @@ MainWindow::serialPort_update_PacketStatus(UserComm::packetStatus toStatus,
         packetTimeout_[idx] = 0;
         packetRetries_[idx] = SERIALPORT_ACK_RETRIES;
     }
-    printf("status changed [%02x]\r\n", idx);
-    for(int i = 0; i < UserComm::NUMB_OF_CMD; i++)
-        printf("[%02x] ",static_cast<uint8_t>(packetStatus_[i]));
-    std::cout << std::endl;
 }
 /*
  * @brief: get current packet status to manage communication process
@@ -903,11 +973,43 @@ MainWindow::serialPort_get_PacketStatus(UserComm::PROTOCOL_CMD packetType)
 }
 
 void
+MainWindow::keyPressEvent(QKeyEvent *event)
+{
+    switch(event->key())
+    {
+    case Qt::Key_M:
+        ui->pushButton_cmdMoveToXYZ->click();
+        break;
+    case Qt::Key_S:
+        ui->pushButton_cmdStop->click();
+        break;
+    case Qt::Key_D:
+        ui->pushButton_cmdDrop->click();
+        break;
+    case Qt::Key_G:
+        ui->pushButton_cmdGrab->click();
+        break;
+    default:
+        break;
+    }
+}
+
+void
 MainWindow::on_horizontalSlider_Filter_z_valueChanged(int value)
 {
     filter_z = double(value/100.0);
     QString str_z = QString::number(filter_z,'f',3);
     ui->label_Filter_z->setText(str_z);
+}
+
+void
+MainWindow::on_horizontalSlider_movableDistance_valueChanged(int value)
+{
+    movableDistance_ = float(value/1000.f);
+    ui->label_movable->setText(QString::number(value));
+#if DEBUG_LEVEL <= 3
+    std::cout << "movableDistance_: " << movableDistance_ << std::endl;
+#endif
 }
 
 void
@@ -924,6 +1026,7 @@ MainWindow::on_pushButton_trackObject_clicked()
         userTracker.stopTracking();
     }
     userTracker.setReferenceCloud(recognizedObjects_[trackObject_selectedIdx_]);
+    isRefFitnessSet_ = false;
 
     // Clear visualizer
     ui->comboBox_recognizedObjects->clear();
@@ -958,8 +1061,12 @@ void
 MainWindow::on_pushButton_stopTracking_clicked()
 {
     userTracker.stopTracking();
+#ifdef DRAW_PARTICLE_CENTROID
     viewer_->removePointCloud("particleCentroid",0);
-
+#endif
+#ifdef DRAW_PARTICLE_CLOUD
+    viewer_->removePointCloud("particles",0);
+#endif
     viewer_->removeAllShapes();
 }
 
@@ -967,12 +1074,81 @@ void
 MainWindow::drawResult()
 {
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr particles = userTracker.getParticleCloud();
+    if(!userTracker.hasTarget())
+    {
+        std::cerr << "Lost track, No target !!! " << std::endl;
+    }
 
+    pcl::PointCloud<pcl::PointXYZ>::Ptr particles = userTracker.getParticleCloud();
     if(particles == nullptr)
     {
         // Wait for next frame
         return;
+    }
+
+#ifdef DRAW_PARTICLE_CLOUD
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> green_color (particles, 32, 253, 143);
+    if (!viewer_->updatePointCloud (particles, green_color, "particles"))
+    {
+        viewer_->addPointCloud(particles,"particles",0);
+        viewer_->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
+                                                  2, "particleCloud");
+    }
+#endif
+
+    static double refFitness = 0;
+    double fitness = userTracker.getFitRatio();
+    if(fabs(fitness) > fabs(refFitness))
+    {
+        refFitness = fitness;
+#if DEBUG_LEVEL <= 3
+        std::cout << "refFitness: " << refFitness << std::endl;
+#endif
+    }
+    if(!isRefFitnessSet_)
+    {
+        isRefFitnessSet_ = true;
+        isValidToSend_ = true;
+        refFitness = fitness;
+#if DEBUG_LEVEL <= 3
+        std::cout << "refFitness: " << refFitness << std::endl;
+#endif
+    }
+
+    static int frame_tolerances = bad_fitness_tolerances_;
+    if(fabs(fitness) > fitness_threshold_ * fabs(refFitness))
+    {
+        frame_tolerances = bad_fitness_tolerances_;
+        // Permit to send move command
+#if DEBUG_LEVEL <= 2
+        std::cout << "Reset frame_tolerances" << std::endl;
+#endif
+    }
+    if(frame_tolerances-- == 0)
+    {
+        std::cout << "target lost" << std::endl;
+
+        // No command will be sent to Robot
+        isValidToSend_ = false;
+
+        switch(QMessageBox::question(  this,
+                    tr("Tracking Notifier"),
+                    tr("Target seems offtracked, continue tracking?"),
+         QMessageBox::Yes |  QMessageBox::No ))
+        {
+        case QMessageBox::Yes:
+            refFitness = fitness;
+            isValidToSend_ = true;
+#if DEBUG_LEVEL <= 3
+            std::cout << "refFitness: " << refFitness << std::endl;
+#endif
+            break;
+        case QMessageBox::No:
+            ui->pushButton_stopTracking->click();
+            break;
+        default:
+            break;
+        }
     }
 
     // Get the average centroid after 2 seconds
@@ -994,7 +1170,9 @@ MainWindow::drawResult()
     x += c[0];
     y += c[1];
     z += c[2];
-    if(now - last < 2)
+
+    // Get the average centroid after TRACKING_AVERAGE_TIME seconds
+    if(now - last < TRACKING_AVERAGE_TIME)
         return;
 
     pcl::PointXYZ centroid(x/count,y/count,z/count);
@@ -1002,8 +1180,8 @@ MainWindow::drawResult()
     x = y = z = 0;
     count = 0;
     last = now;
-    // Get the average centroid after 2 seconds
 
+#ifdef DRAW_PARTICLE_CENTROID
     pcl::PointCloud<pcl::PointXYZ>::Ptr particleCentroid(new pcl::PointCloud<pcl::PointXYZ>);
     particleCentroid->points.push_back(centroid);
 
@@ -1014,6 +1192,7 @@ MainWindow::drawResult()
         viewer_->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
                                                   20.0, "particleCentroid");
     }
+#endif
 
     viewer_->removeShape("R");
     viewer_->addText((boost::format ("number of Reference PointClouds: %d") % userTracker.getReferenceCloudSize()).str(),
@@ -1047,12 +1226,38 @@ MainWindow::drawResult()
                      1.0,1.0,1.0,
                      "C");
 
+    // Remaning tolerance frames
+    viewer_->removeShape("TOLERANCES");
+    viewer_->addText((boost::format ("RTFs: [%d]") % frame_tolerances).str(),
+                     10,120,20,
+                     1.0,1.0,1.0,
+                     "TOLERANCES");
+
     Eigen::Vector4f cam_coords = {c[0],c[1],c[2],1};
     Eigen::Vector4f target_robot_coords = Cam_vs_Robot_Rototranslation(cam_coords,
                                                                        cam_rototranslation_mat_);
-    updateSetpoint(target_robot_coords[0],
-                   target_robot_coords[1],
-                   target_robot_coords[2]);
+    float distanceChanged = euclideanDistance(target_robot_coords[0],target_robot_coords[1],target_robot_coords[2],
+                                              lastSentPoint_[0],lastSentPoint_[1],lastSentPoint_[2]);
+
+#if DEBUG_LEVEL <= 0
+    std::cout << "distanceChanged: " << distanceChanged << std::endl;
+#endif
+
+    if(distanceChanged > movableDistance_)
+    {
+        updateSetpoint(target_robot_coords[0],
+                       target_robot_coords[1],
+                       target_robot_coords[2]);
+        if(isValidToSend_)
+        {
+#if 1
+            std::cout << "Send CMD_MOVETOXYZ" << std::endl;
+#else
+//        serialPort_sendPacket(UserComm::CMD_MOVETOXYZ);
+#endif
+        }
+    }
+
 #if 0
             {
                 std::vector<double> min_points(3,0);
@@ -1074,11 +1279,41 @@ MainWindow::drawResult()
 }
 
 void
+MainWindow::updateControlError()
+{
+   controlError_ = euclideanDistance(endpoint_x_,endpoint_y_,endpoint_z_,
+                                     setpoint_x_,setpoint_y_,setpoint_z_);
+#if DEBUG_LEVEL <= 3
+   std::cout << "controlError_: " << controlError_ << std::endl;
+#endif
+   QPalette pal = ui->label_controlError->palette();
+   if(controlError_ < (0.001 * 5)) // 5mm
+   {
+       pal.setColor(QPalette::WindowText, Qt::darkGreen);
+   }
+   else if((controlError_ < (0.001 * 10)))
+   {
+       pal.setColor(QPalette::WindowText, Qt::yellow);
+   }
+   else
+   {
+       pal.setColor(QPalette::WindowText, Qt::red);
+   }
+   ui->label_controlError->setPalette(pal);
+
+   ui->controlError->setText(QString::number(int(controlError_ * 1000)));
+}
+
+void
 MainWindow::updateEndpoint(float x, float y, float z)
 {
     endpoint_x_ = x;
     endpoint_y_ = y;
     endpoint_z_ = z;
+
+#if DEBUG_LEVEL <= 3
+    std::cout << "endpoint: " << x << " " << y << " " << z << std::endl;
+#endif
 
     ui->lcdNumber_endpoint_x->display((int)(x*1000));
     ui->lcdNumber_endpoint_y->display((int)(y*1000));
@@ -1104,16 +1339,16 @@ MainWindow::on_pushButton_cmdGrab_clicked()
 }
 void MainWindow::on_pushButton_cmdMoveToXYZ_clicked()
 {
-    setPosition_window myWindow(this);
+    setPosition_window myWindow(setpoint_x_,setpoint_y_,setpoint_z_,this);
     myWindow.exec();
 
     if(myWindow.result() != QDialog::Accepted)
     {
         return;
     }
-    updateSetpoint((float)(myWindow.setX_mm/1000.f),
-                   (float)(myWindow.setY_mm/1000.f),
-                   (float)(myWindow.setZ_mm/1000.f));
+    updateSetpoint(myWindow.get_X_setPosition(),
+                   myWindow.get_Y_setPosition(),
+                   myWindow.get_Z_setPosition());
     serialPort_sendPacket(UserComm::CMD_MOVETOXYZ);
 }
 void MainWindow::on_pushButton_cmdStop_clicked()
@@ -1139,7 +1374,10 @@ MainWindow::updateCamRototranslationMat(float val,int rows, int cols)
 
     cam_rototranslation_mat_(rows,cols) = val;
 
-//    std::cout << cam_rototranslation_mat_ << std::endl;
+#if DEBUG_LEVEL == 0
+    std::cout << cam_rototranslation_mat_ << std::endl;
+#endif
+
 }
 /*
  * SLOT
@@ -1165,4 +1403,26 @@ MainWindow::textEditChanged()
         float val = _text->toPlainText().toFloat();
         updateCamRototranslationMat(val,rows,cols);
     }
+}
+
+
+void
+MainWindow::on_horizontalSlider_badFitnessTolerances_valueChanged(int value)
+{
+   bad_fitness_tolerances_ = value;
+   ui->label_badFitnessTolerances->setText(QString::number(bad_fitness_tolerances_));
+#if DEBUG_LEVEL == 3
+    std::cout << "bad_fitness_tolerances_: " << bad_fitness_tolerances_ << std::endl;
+#endif
+}
+
+
+void
+MainWindow::on_horizontalSlider_fitnessThreshold_valueChanged(int value)
+{
+   fitness_threshold_ = float(value/1000.f);
+   ui->label_fitnessThreshold->setText(QString::number(fitness_threshold_,'f',2));
+#if DEBUG_LEVEL == 3
+    std::cout << "fitness_threshold_: " << fitness_threshold_ << std::endl;
+#endif
 }
