@@ -195,6 +195,8 @@ protected:
     float fitness_threshold_;
     bool isValidToSend_;			// tweak for safty reason
 
+    ofstream logfile;
+
     float distToRobot_;  // camera calibration purpose
     Eigen::Matrix4f cam_rototranslation_mat_;
 

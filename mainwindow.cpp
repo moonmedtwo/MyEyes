@@ -244,6 +244,14 @@ MainWindow::MainWindow(QWidget *parent) :
     serialPort_init();
 
     userSysticks.start();
+
+    logfile.open("log.txt",ios::app);
+    if(!logfile.is_open())
+    {
+        std::cerr << "Cannot open log file" << std::endl;
+    }
+    std::time_t t = std::time(NULL);
+    logfile << "App starts at " << std::ctime(&t) << std::endl;
 }
 
 MainWindow::~MainWindow()
@@ -254,6 +262,7 @@ MainWindow::~MainWindow()
     delete grabber_;
     delete grabberWDT;
     delete commWDT;
+    logfile.close();
 
     delete ui;
 }
@@ -333,7 +342,7 @@ MainWindow::kinect_init()
        ui->text_roto00->setText("0");
        ui->text_roto01->setText("0");
        ui->text_roto02->setText("-1");
-       ui->text_roto03->setText("0");
+       ui->text_roto03->setText("1.6");
 
        ui->text_roto10->setText("1");
        ui->text_roto11->setText("0");
@@ -343,7 +352,7 @@ MainWindow::kinect_init()
        ui->text_roto20->setText("0");
        ui->text_roto21->setText("-1");
        ui->text_roto22->setText("0");
-       ui->text_roto23->setText("0.055");
+       ui->text_roto23->setText("0.08");
 
        ui->text_roto30->setText("0");
        ui->text_roto31->setText("0");
@@ -1028,6 +1037,9 @@ MainWindow::on_pushButton_trackObject_clicked()
     ui->comboBox_recognizedObjects->clear();
     removeCloudFromViz(recognizedObjects_,REG_OBJECT_ID);
     recognizedObjects_.clear();
+
+    logfile << "Tracking start as " << userSysticks.elapsed() << " ms" << std::endl;
+    logfile << "time(ms),x,y,z" << std::endl;
 }
 
 void
@@ -1162,6 +1174,11 @@ MainWindow::drawResult()
     c[0] = user_rounding(c[0],3);
     c[1] = user_rounding(c[1],3);
     c[2] = user_rounding(c[2],3);
+
+    logfile << userSysticks.elapsed() << ","
+            << c[0] << ","
+            << c[1] << ","
+            << c[2] <<std::endl;
 
     x += c[0];
     y += c[1];
