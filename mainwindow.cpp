@@ -915,10 +915,6 @@ MainWindow::serialPort_wrapPacket(UserComm::PROTOCOL_CMD packetType, uint8_t &le
        Util_bufferFloat(pBuf+1,setpoint_x_);
        Util_bufferFloat(pBuf+5,setpoint_y_);
        Util_bufferFloat(pBuf+9,setpoint_z_);
-
-       lastSentPoint_[0] = setpoint_x_;
-       lastSentPoint_[1] = setpoint_y_;
-       lastSentPoint_[2] = setpoint_z_;
     }
 
     return pBuf;
@@ -1250,10 +1246,13 @@ MainWindow::drawResult()
                        target_robot_coords[2]);
         if(isValidToSend_)
         {
-#if 1
+            lastSentPoint_[0] = setpoint_x_;
+            lastSentPoint_[1] = setpoint_y_;
+            lastSentPoint_[2] = setpoint_z_;
+#if 0
             std::cout << "Send CMD_MOVETOXYZ" << std::endl;
 #else
-//        serialPort_sendPacket(UserComm::CMD_MOVETOXYZ);
+        serialPort_sendPacket(UserComm::CMD_MOVETOXYZ);
 #endif
         }
     }
