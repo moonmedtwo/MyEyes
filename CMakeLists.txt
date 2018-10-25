@@ -10,13 +10,13 @@ set(CMAKE_AUTOUIC ON) # UI files
 # Find includes in corresponding build directories
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # Set Error when Warning
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -lboost_system -lstdc++fs -Wall -Wno-comment -Werror")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -lboost_system -lstdc++fs -Wall -Wno-comment")
 
 # Find the QtWidgets library
 find_package(Qt5 REQUIRED Widgets Core Gui SerialPort)
 
 find_package(VTK REQUIRED)
-find_package(PCL 1.7.1 REQUIRED)
+find_package(PCL REQUIRED)
 
 # Fix a compilation bug under ubuntu 16.04 (Xenial)
 list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")

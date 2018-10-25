@@ -8,13 +8,15 @@ QT       += core gui serialport
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-INCLUDEPATH += $$quote(/usr/include/pcl-1.7/)\
-               $$quote(/usr/include/vtk-6.2/)\
+INCLUDEPATH += $$quote(/usr/include/pcl-1.8/)\
+               $$quote(/usr/include/vtk-6.3/)\
+               $$quote(/usr/include/eigen3)\
                $$quote(/usr/include/ni/)\
-               $$quote(../metslib/)\
+               $$quote(/usr/include/pcl-1.8/pcl/recognition/3rdparty/metslib/)\
 
 CONFIG += static
-
+LIBS += -L"/usr/lib/x86_64-linux-gnu/libboost_system.so" -lboost_system
+LIBS += -L"/usr/lib/libOpenNI.so" -lOpenNI
 TARGET = MyEyes
 TEMPLATE = app
 
